@@ -1,0 +1,37 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use Illuminate\Database\Eloquent\Model;
+
+/**
+ * Example N4 model (Navis N4 read replica).
+ *
+ * N4 conventions:
+ * - Connection "n4" must exist in config/database.php of the host app.
+ * - N4 tables use "gkey" as primary key.
+ * - The replica is READ-ONLY: never call save()/update()/delete() on these models.
+ */
+final class ExampleN4Model extends Model
+{
+    protected $connection = 'n4';
+
+    protected $table = 'example_table';
+
+    protected $primaryKey = 'gkey';
+
+    public $incrementing = false;
+
+    public $timestamps = false;
+
+    protected function casts(): array
+    {
+        return [
+            'gkey' => 'integer',
+            'created' => 'datetime',
+            'changed' => 'datetime',
+        ];
+    }
+}

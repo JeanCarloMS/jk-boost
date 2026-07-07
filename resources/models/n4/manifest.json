@@ -1,0 +1,7 @@
+{
+    "name": "n4",
+    "title": "N4 Models",
+    "description": "Modelos Eloquent para la base de datos de Navis N4 (réplica de solo lectura, conexión \"n4\").",
+    "namespace": "App\\Models\\N4",
+    "target_path": "app/Models/N4"
+}

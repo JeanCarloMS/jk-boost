@@ -1,0 +1,6 @@
+{
+    "name": "ddd-poo-programatic-patterns",
+    "title": "DDD + POO + Programmatic Patterns",
+    "description": "Master DDD architecture rule — Laravel 13, PHP 8.5, Filament v5, Livewire v4, Spatie Laravel Data v4. Use when creating or refactoring bounded contexts, Actions, Repositories, Strategies, DTOs, VOs, Filament/Livewire pages, or migrating legacy CQRS/UseCase code. Covers the Action pattern, design pattern priority, SOLID, DI, immutability, logging, security boundaries, naming, and Definition of Done. Load satellite skills when relevant: ddd-layer-boundaries, ddd-domain-modeling, ddd-jobs-async, ddd-external-adapters, ddd-logging, ddd-testing.",
+    "always_apply": true
+}
