@@ -16,8 +16,55 @@ The `ddd-poo-programatic-patterns` master rule is always applied.
 
 - `tests/Pest.php` binds `TestCase` + `RefreshDatabase` to the **Feature** suite only. Do not re-declare `uses(RefreshDatabase::class)` inside Feature files — it's already global.
 - **Unit tests run on plain PHPUnit** — no container, no DB, no facades. If a unit test needs the Laravel app (rare — prefer moving it to Feature), opt in with `uses(TestCase::class)` in that file.
-- Test env (`phpunit.xml`): sqlite `:memory:`, `QUEUE_CONNECTION=sync`, `CACHE_STORE=array`, `MAIL_MAILER=array`. `RefreshDatabase` runs migrations — seed data created by migrations (e.g. the Kucoin exchange row) is available; anything else needs factories or explicit creation.
 - Run: `php artisan test --compact --filter=<ClassName>` or `php artisan test --compact tests/Feature/<Context>/`.
+
+### Test environment isolation (mandatory — never hit the real DB)
+
+Feature tests use `RefreshDatabase`, which **drops and re-runs all migrations**. If tests load your local `.env` (MySQL, SQL Server, etc.), **you will wipe production-like data**. This app uses three layers of protection — keep all of them in place:
+
+#### 1. `.env.testing` (required, committed)
+
+Every Laravel app in this repo **must** have a root `.env.testing` file. When `APP_ENV=testing`, Laravel loads `.env.testing` **instead of** `.env`.
+
+Minimum DB settings (never point at a real server):
+
+```dotenv
+APP_ENV=testing
+DB_CONNECTION=sqlite
+DB_DATABASE=:memory:
+DB_FOREIGN_KEYS=true
+DB_URL=
+```
+
+Also use in-memory / array drivers for side effects: `CACHE_STORE=array`, `QUEUE_CONNECTION=sync`, `MAIL_MAILER=array`, `SESSION_DRIVER=array`. Copy other non-secret defaults from `.env.example` as needed — **never** copy real DB hosts, `DB_URL`, or API credentials from `.env`.
+
+If `.env.testing` is missing, PHPUnit falls back to `.env` and Feature tests can destroy your local database.
+
+#### 2. `phpunit.xml` (required overrides)
+
+PHPUnit must force the testing environment **before** the app boots. Keep these `<env>` entries (do not remove or weaken them):
+
+| Variable | Value | Why |
+|---|---|---|
+| `APP_ENV` | `testing` | Triggers `.env.testing` load |
+| `DB_CONNECTION` | `sqlite` | No MySQL/SQL Server |
+| `DB_DATABASE` | `:memory:` | Ephemeral DB per process |
+| `DB_URL` | `` (empty) | Clears any DSN from env files |
+| `CACHE_STORE` | `array` | No Redis/filesystem cache bleed |
+| `QUEUE_CONNECTION` | `sync` | No real queue workers |
+| `MAIL_MAILER` | `array` | No outbound mail |
+| `SESSION_DRIVER` | `array` | No session persistence |
+
+`bootstrap="tests/bootstrap.php"` must stay set so cached config cannot override the above.
+
+#### 3. `tests/bootstrap.php` + `tests/TestCase.php` (defense in depth)
+
+- **`tests/bootstrap.php`** — deletes `bootstrap/cache/config.php` and `bootstrap/cache/routes-v7.php` before autoload. Stale config cache is a common cause of tests silently using the real `database.default`.
+- **`tests/TestCase.php`** — `enforceTestingDatabaseConfiguration()` runs on app boot and again in `beforeRefreshingDatabase()`. It **throws** unless `database.default === sqlite` and `database.connections.sqlite.database === :memory:`. Never remove or bypass this guard.
+
+`RefreshDatabase` runs migrations against that in-memory sqlite only — seed data created by migrations (e.g. the Kucoin exchange row) is available; anything else needs factories or explicit creation.
+
+**Troubleshooting:** if tests refuse to run with "Refusing to run database migrations…", run `php artisan config:clear` and confirm `.env.testing` + `phpunit.xml` still force sqlite `:memory:`.
 
 ## Layout
 
@@ -115,6 +162,9 @@ it('adds money of the same currency into a new instance', function () {
 
 ## Test Checklist
 
+- [ ] `.env.testing` exists with `DB_CONNECTION=sqlite` and `DB_DATABASE=:memory:` (never uses `.env` for DB)
+- [ ] `phpunit.xml` keeps sqlite `:memory:` overrides and `bootstrap="tests/bootstrap.php"`
+- [ ] `tests/TestCase.php` guard (`enforceTestingDatabaseConfiguration`) intact
 - [ ] Correct suite: Feature = needs DB/container; Unit = pure PHP
 - [ ] No duplicated suite folder (`Feature/Feature`), no placeholder tests
 - [ ] Action: happy path + skip/idempotency + failure path
