@@ -37,7 +37,7 @@ Run all CLI commands directly — **do not use Sail**: `php artisan ...`, `compo
 | **Strategy** | Variant behavior (`BaseBot` → `DcaStrategy`/`SignalBotEntity`; indicators → `BaseIndicator`). |
 | **Pipeline (Pipes)** | Sequential filters/validations before an operation; pipes short-circuit by throwing. |
 | **Adapter** | External APIs behind Domain interfaces (`ExchangeAdapterInterface`). |
-| **DTO (Data)** | Typed data crossing layers — Spatie Laravel Data, `Data` suffix. |
+| **DTO (Data)** | Typed data crossing layers and return contracts — return objects, not arrays; use Spatie Laravel Data when advanced mapping/validation/casting is needed, lightweight PHP DTOs otherwise. |
 | **Value Object** | Immutable domain value: private constructor, static factories, invariant validation. |
 | **Outbox** | Reliable async side effects after persistence (see `ddd-jobs-async`). |
 
@@ -46,7 +46,7 @@ Common stacks: Action + Repository (+ nested Actions) · Strategy + Factory + Pi
 ## Hard Rules (never violate)
 
 - **No new CQRS or UseCases** — Actions instead; migrate handlers and `UC` classes on touch.
-- **No raw arrays** for domain data between classes — use Data DTOs, VOs, Entities.
+- **No raw arrays** for domain data between classes or function returns — return typed DTOs, VOs, Entities, Results, or typed Collections. Arrays are only acceptable at true framework/transport/persistence boundaries (`toArray()`, request payloads, JSON serialization, DB writes).
 - **No business logic** in Filament, Livewire, Controllers, or console Commands — delegate to an Action/Service.
 - **No Eloquent queries inside Entities/VOs/Domain services** — persistence goes through Repositories.
 - **No `new`/`app()`/`resolve()` in Domain or Application constructors** — container injection only. Exceptions: Filament/Livewire closures (tables, forms) and Job `handle()` when constructor DI breaks queue serialization — resolve there and say why.
@@ -74,7 +74,7 @@ Single responsibility per class · Open/closed via Strategy/Factory/Pipeline · 
 | `BaseException` / `HandleException` | `Shared/Domain/Exceptions/` | All exceptions (Logger + Telegram reporting built in) |
 | `Logger` | `app/Contexts/Logger/` | All logging — inject, don't use `Log::` facade |
 | `ExecutionContext` | `Shared/Application/Support/` | Trace-id / execution context |
-| `ArrayableTrait` / `BaseCustomData` | `Shared/Application/` | Hand-rolled DTO/VO `toArray()` |
+| `ArrayableTrait` / `BaseCustomData` | `Shared/Application/` | Lightweight DTO/VO `toArray()` when Spatie Data is unnecessary |
 | `#[Validate]` + `hasFieldsValidator` | `Shared/Domain/{Attributes,Validators}/` | Attribute-driven DTO validation |
 | `BaseTriggerData` | `Shared/Application/Data/` | Per-strategy trigger DTOs |
 
@@ -88,7 +88,7 @@ Single responsibility per class · Open/closed via Strategy/Factory/Pipeline · 
 ## Exceptions and Results
 
 - Throw `HandleException` (or a context exception extending `BaseException`) with `logLevel:` set for severity.
-- Expected business outcomes (skipped, already processed, already exists) → return early with a log entry or a Result DTO — not an exception.
+- Expected business outcomes (skipped, already processed, already exists) → return early with a log entry or a typed Result DTO — not an exception and not a shape array.
 - Document `@throws` on public Application methods.
 
 ## Naming
@@ -100,17 +100,21 @@ Single responsibility per class · Open/closed via Strategy/Factory/Pipeline · 
 
 ## DTO Standards
 
-- Location: `Application/Data/` inside the context. Spatie Laravel Data, `Data` suffix.
-- Typed properties (no untyped `public $x`), enum-typed props with `#[WithCast]` casters where needed.
+- Location: `Application/Data/` inside the context; `Data` suffix for DTOs and `ResultData` / intent-specific names for results.
+- Functions should prefer returning a typed DTO object over `array`. If a method currently needs multiple values, create a small DTO/result object instead of documenting an array shape.
+- Choose DTO implementation by need:
+  - Extend `Spatie\LaravelData\Data` when the DTO needs validation rules, casts, nested Data objects, request mapping, serialization, or `Data::from()` hydration.
+  - Use a lightweight `final readonly class` with promoted typed properties when it only carries internal data and does not need Spatie features.
+- Typed properties always (no untyped `public $x`), enum-typed props with `#[WithCast]` casters where needed.
 - Static named constructors expressing intent: `fromModel()`, `forCycleEntryDispatch()`, `fromExchangeSymbol()`.
 - Validation rules belong in the DTO (`#[Validate]` attribute or Spatie rules) — not in Actions.
-- Typed collections extend `Illuminate\Support\Collection` with the `DataCollection` suffix.
+- Typed collections extend `Illuminate\Support\Collection` with the `DataCollection` suffix; collection-returning methods should return a typed collection object, not `array<int, array{...}>`.
 
 ## Definition of Done
 
 - [ ] Correct layer and folder — see `ddd-layer-boundaries`
 - [ ] Logic in Actions; UI, Jobs, and console Commands are thin
-- [ ] DTOs/VOs/Entities — no array payloads between classes
+- [ ] DTOs/VOs/Entities/typed Collections — no array payloads between classes or as return contracts
 - [ ] `run()` method, `final`, `strict_types`, promoted readonly constructor
 - [ ] No new CQRS/UseCases; touched legacy handlers and UCs migrated to Actions
 - [ ] Logger injected; logs at critical points with `Class::method` prefix

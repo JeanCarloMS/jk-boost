@@ -31,14 +31,14 @@ Every new or refactored class in Application/Domain layers gets tests before the
 
 | Class type | Suite | What to assert |
 |---|---|---|
-| **Action (atomic)** | Unit | Delegates to repository/domain service with the right arguments, return type |
+| **Action (atomic)** | Unit | Delegates to repository/domain service with the right arguments, typed return object |
 | **Action (orchestration)** | Feature (uses DB/container) | Happy path, idempotency guard (skip path), failure marks state + rethrows, job dispatched (`Queue::fake`) |
 | **ValueObject** | Unit | Invariants throw on invalid input, factories, arithmetic returns new instances, `toArray()` |
 | **Entity** | Unit | `fromModel()`/`from()` mapping, business methods (`exitCycle`, `calculateProfit`) |
 | **Factory** | Unit | Correct variant per enum case, `default` throws `HandleException` |
 | **Strategy / Trader** | Feature | Behavior per variant with mocked collaborators |
 | **Pipe** | Unit | Passes valid aggregate to `$next`, throws `HandleException` on guard failure |
-| **DTO (Data)** | Unit or Feature | `from()` mapping, named constructors, casts, validation rules |
+| **DTO / Result DTO** | Unit or Feature | Constructor typing, `from()`/named constructors, casts, validation rules when using Spatie Data, no array-shape return contract |
 | **Repository** | Feature | Custom query methods return expected rows (not inherited BaseRepository CRUD) |
 | **Job** | Feature | Delegates to Action; `failed()` notifies |
 | **Filament page/action** | Feature | Delegation + authorization, via `livewire()` helper |
@@ -69,6 +69,7 @@ $repository->shouldReceive('saveFromArray')
 - `Mockery::on()` / `Mockery::type()` / `withArgs()` for argument matching.
 - `Mockery::mock('overload:'.MarketRepository::class)` / `'alias:'.ExchangeAdapterFactory::class` **only** for legacy static factories that can't be injected — don't design new code to need this.
 - Hand-rolled doubles (anonymous classes extending `BaseBot`/`BaseSymbolsData`) are acceptable for abstract aggregates that Mockery handles poorly.
+- When testing multi-value outcomes, assert the concrete DTO/Result class and typed properties instead of asserting associative array keys. Array assertions are reserved for explicit serialization boundaries such as `toArray()` or HTTP JSON payloads.
 
 **Laravel fakes alongside Mockery:**
 
@@ -117,6 +118,7 @@ it('adds money of the same currency into a new instance', function () {
 - [ ] Correct suite: Feature = needs DB/container; Unit = pure PHP
 - [ ] No duplicated suite folder (`Feature/Feature`), no placeholder tests
 - [ ] Action: happy path + skip/idempotency + failure path
+- [ ] Multi-value returns are asserted as DTO/Result objects, not associative arrays
 - [ ] VO/Entity/Factory/Pipe covered when touched
 - [ ] Interface mocks in Unit; `Queue::fake`/`Http::fake` + `preventStrayRequests` at boundaries
 - [ ] `Mockery::close()` in `afterEach` where Mockery is used

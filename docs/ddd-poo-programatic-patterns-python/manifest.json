@@ -1,0 +1,6 @@
+{
+    "name": "ddd-poo-programatic-patterns-python",
+    "title": "DDD + POO + Programmatic Patterns (Python)",
+    "description": "Master DDD architecture rule for Python — FastAPI, SQLAlchemy 2, Pydantic v2, Celery, Redis, pytest. Use when creating or refactoring bounded contexts, Actions, Repositories, Strategies, DTOs, VOs, API routers, CLI commands, or migrating legacy service/handler code. Covers the Action pattern, design pattern priority, SOLID, DI, immutability, logging, security boundaries, naming, and Definition of Done. Load satellite skills when relevant: ddd-layer-boundaries-python, ddd-domain-modeling-python, ddd-jobs-async-python, ddd-external-adapters-python, ddd-logging-python, ddd-testing-python.",
+    "always_apply": true
+}

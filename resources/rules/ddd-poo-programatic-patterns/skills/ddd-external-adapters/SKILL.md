@@ -36,11 +36,11 @@ Exchanges/
 **Rules:**
 - The rest of the app depends **only** on `ExchangeAdapterInterface` and the Base Data types — never on a platform SDK, raw response arrays, or platform Data classes.
 - New platform = new `Platforms/{Name}/` tree **including `Adapters/`** + a new arm in `ExchangeAdapterFactory::getExchange()` (and `ExchangeWebSocketFactory` if it streams). A platform without an adapter is unusable (Bingx currently has RestApi/Data but no adapter — complete it before wiring).
-- Adapters return **Data DTOs built by a `Exchange*DataFactory`**, never raw arrays.
+- Adapters return **typed Data DTOs built by a `Exchange*DataFactory`**, never raw arrays. If the response needs casts, validation, nested data, or serialization, extend `Spatie\LaravelData\Data`; otherwise a lightweight `final readonly` PHP DTO is enough.
 
 ## Adapter Method Skeleton (the repeated convention)
 
-Every adapter endpoint follows: build request Data → call raw client → validate response → map to Data.
+Every adapter endpoint follows: build request Data → call raw client → validate response → map to a typed Data/Result DTO.
 
 ```php
 public function postOrder(BaseReqPostData $request): BaseSpotOrderData
@@ -65,19 +65,19 @@ public function postOrder(BaseReqPostData $request): BaseSpotOrderData
 
 Signed platform clients (Guzzle, `Platforms/Kucoin/RestApi/Request.php`): HMAC signing, `['http_errors' => false]`, explicit `timeout` (60s for exchange calls), time-sync offset cached in Redis, wrap transport exceptions into the platform exception.
 
-Simple JSON microservice clients follow `TechnicalsV2/Infrastructure/Clients/PyTaApiClient` — the reference implementation:
+Simple JSON microservice clients follow `TechnicalsV2/Infrastructure/Clients/PyTaApiClient` — the legacy reference implementation returns a decoded array at the raw HTTP edge, but new clients should wrap successful payloads in a response DTO before leaving the client/adapter boundary:
 
 ```php
 final class PyTaApiClient implements PyTaApiClientInterface
 {
-    public function sendRequest(string $endpoint, array $data): array
+    public function sendRequest(string $endpoint, PyTaApiRequestData $data): PyTaApiResponseData
     {
         try {
             $response = Http::acceptJson()
                 ->connectTimeout(2)
                 ->timeout(5)
                 ->retry([200, 400], throw: false)   // backoff ms; don't throw mid-retry
-                ->post($endpoint, $data);
+                ->post($endpoint, $data->toArray());
         } catch (ConnectionException $e) {
             Log::error('PyTaApiClient::sendRequest could not connect', ['endpoint' => $endpoint, 'error' => $e->getMessage()]);
             throw new RuntimeException('PyTaApi could not connect', previous: $e);
@@ -86,7 +86,7 @@ final class PyTaApiClient implements PyTaApiClientInterface
         if ($response->failed()) { /* Log::warning + throw RuntimeException('invalid response') */ }
         if (! is_array($payload = $response->json())) { /* Log::warning + throw RuntimeException('invalid payload') */ }
 
-        return $payload;
+        return PyTaApiResponseData::fromPayload($payload);
     }
 }
 ```
@@ -95,6 +95,7 @@ final class PyTaApiClient implements PyTaApiClientInterface
 - Interface in the context (`PyTaApiClientInterface`) + implementation in `Infrastructure/Clients/`; **bind the pair in `TradingServiceProvider::register()`** (verify the binding exists — a commented-out binding means interface injection fatals).
 - Timeouts are mandatory: short `connectTimeout` (2s), bounded `timeout`, retry with backoff array and `throw: false`.
 - Layered error handling: transport error / HTTP failure / malformed payload each get their own log line (`Class::method` prefix) and a wrapped exception with `previous:`.
+- Public client/adapter methods return typed request/response DTOs or Result DTOs, not array shapes. Keep raw arrays local to JSON decoding, signing payloads, and `toArray()` calls.
 - Log latency for slow calls (`duration_ms` in context). Never log API keys or signatures.
 
 ## Websockets
@@ -132,10 +133,10 @@ final class OrderEntryNotification extends Notification implements ShouldQueue
 
 - [ ] Consumers depend on the Domain interface + Base Data types only
 - [ ] Factory arm added; `default` throws `HandleException`
-- [ ] Adapter methods: request Data → raw client → response validator → Data factory
+- [ ] Adapter methods: request Data → raw client → response validator → typed Data/Result DTO factory
 - [ ] Timeouts + retry-with-backoff on every HTTP client; transport errors wrapped with `previous:`
 - [ ] Interface binding present in `TradingServiceProvider`
-- [ ] No raw arrays or platform types leaking out of Infrastructure
+- [ ] No raw arrays or platform types leaking out of Infrastructure; public returns are typed DTOs
 - [ ] No `ds()`/`dump()` leftovers; no secrets in logs
 - [ ] Websocket streams have a heartbeat health check
 - [ ] Notifications: `ShouldQueue`, `via()` → `TelegramChannel`, message built as `TelegramMessage` VO

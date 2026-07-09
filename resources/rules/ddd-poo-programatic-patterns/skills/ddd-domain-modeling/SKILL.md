@@ -113,6 +113,7 @@ return match ($strategyType) {
 - Factories create Strategies, Adapters, Checkers, Indicators — variant selection, not entity persistence.
 - `default` arm **always throws** `HandleException` — never return null silently.
 - **Return instances typed by interface** (`BotInterface`, `BaseIndicator`) — not class-name strings (the checker factories returning `::class` strings are legacy; don't copy that).
+- When a factory must return structured metadata alongside the instance, introduce a typed Result DTO instead of returning an associative array.
 - Two-level selection is fine when the variant depends on runtime state (`SignalEntryCheckerFactorySelector` picks a factory by active-order count, the factory picks the checker by enum).
 - Name the method `make()` for new factories (legacy uses `create`/`getExchange`/`getChecker`).
 
@@ -164,6 +165,8 @@ final class BotEnabledFilterPipe
 
 `Domain/Services/` orchestrate Entities + VOs + Repositories for logic that doesn't belong to one entity (`CycleDomainService::exitCycle/refreshCycle`). Constructor-injected `readonly` dependencies (repository + `Logger`). Name them by concept — prefer `XxxDomainService` when a `XxxService` facade already exists in Application to avoid collisions.
 
+Domain services return typed domain objects (Entity, VO, interface, or Result DTO). Do not return associative arrays for multi-value outcomes; create a small DTO/result object so downstream Application code remains fully typed.
+
 ## Exceptions
 
 - Base: `Shared/Domain/Exceptions/BaseException` — constructor flags `body`, `footer`, `sendTelegram`, `saveException`, `saveStack`, `logLevel`; `report()` logs via `Logger` and optionally notifies Telegram; `render()` returns JSON for `api/*`.
@@ -178,6 +181,7 @@ final class BotEnabledFilterPipe
 - [ ] Enum is backed, `Enum` suffix, helpers only as needed
 - [ ] Caster placed in `Domain/Casters/`, implements Spatie `Cast`
 - [ ] Factory: static `make()`, `match` on enum, `default` throws `HandleException`, returns interface type
+- [ ] Domain service/factory multi-value returns are DTO/Result objects, not associative arrays
 - [ ] Pipes short-circuit by throwing; pipeline orchestrated in the Strategy/Action
 - [ ] Exceptions extend `BaseException`/`HandleException`
 - [ ] Strategies/aggregates under `Domain/Strategies/`, not `Entities/`

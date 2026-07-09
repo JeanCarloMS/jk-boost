@@ -18,7 +18,7 @@ The `ddd-poo-programatic-patterns` master rule is always applied.
 | Layer | Path | Responsibilities | Must NOT import |
 |---|---|---|---|
 | **Domain** | `Domain/` | Entities (pure PHP), VOs, Enums, Factories, Pipes, Strategies, domain Services, Casters, Exceptions, repository **interfaces** | HTTP, Filament, Livewire, queued Jobs |
-| **Application** | `Application/` | Actions, Services (facades), Data DTOs, Jobs (thin), Listeners | Filament, Livewire, HTTP Controllers |
+| **Application** | `Application/` | Actions, Services (facades), typed Data/Result DTOs, Jobs (thin), Listeners | Filament, Livewire, HTTP Controllers |
 | **Infrastructure** | `Infrastructure/` | Eloquent + Cache repositories, exchange Adapters, HTTP clients, Notifications | Filament, Livewire |
 | **UI** | `app/Filament/{Admin,UserPanel}`, Controllers, Livewire | Validate, authorize, map DTO, delegate, respond | Business logic, direct Eloquent queries |
 
@@ -46,7 +46,7 @@ app/Contexts/{Context}/
 │   ├── Actions/             ← ALL use cases (atomic or orchestration), Action suffix
 │   ├── UseCases/            ← LEGACY (UC suffix) — never add here; migrate to Actions on touch
 │   ├── Services/            ← facades grouping Actions / integration logic
-│   ├── Data/                ← Spatie Data DTOs, Results, DataCollections
+│   ├── Data/                ← typed DTOs/Results/DataCollections; Spatie Data only when advanced features are needed
 │   ├── Jobs/                ← thin queue jobs (delegate to Action/Service)
 │   ├── Interfaces/          ← application service contracts
 │   └── Listeners/           ← thin event listeners
@@ -65,7 +65,7 @@ Some contexts use `Domain/Contracts/` (Account) or `Domain/Repositories/` (Order
 
 | Class | Folder | Rule |
 |---|---|---|
-| `VerbNounAction` | `Application/Actions/` | **Every use case.** Atomic: one public `run()` delegating to one repository or domain-service call. Orchestration: injects repositories, domain services, other Actions; owns transactions, state transitions, try/catch, job dispatch. May expose a few related public methods (`dispatchCycleEntry`, `dispatchCycleExit`). No validation (DTO), no business rules (Domain). |
+| `VerbNounAction` | `Application/Actions/` | **Every use case.** Atomic: one public `run()` delegating to one repository or domain-service call. Orchestration: injects repositories, domain services, other Actions; owns transactions, state transitions, try/catch, job dispatch. May expose a few related public methods (`dispatchCycleEntry`, `dispatchCycleExit`). No validation (DTO), no business rules (Domain). `run()` inputs and outputs are typed objects whenever data crosses a boundary; use a DTO/Result instead of returning array shapes. |
 | `XxxService` | `Application/Services/` | Facade exposing related Actions to UI (`BotService`), or real integration logic (`OrderEntryService`). Free-form method names. If it implements an interface, the interface must declare **all** public methods — no under-specified contracts. |
 
 Legacy note: `VerbNounUC` classes in `Application/UseCases/` are the same pattern under an old name — treat them as atomic Actions, never create new ones, migrate on touch (see below).
@@ -121,7 +121,7 @@ Two legacy generations coexist; both migrate to Actions. Migrate opportunistical
 
 **CQRS pairs** (`Application/Commands/` + `Application/Queries/` in Assets, Bots, Orders): `XCommand` + `XCommandHandler::handle()` dispatched through `CommandBus`/`QueryBus` (`Shared/Application/Support/Bus/`, auto-discovered). **Never add new ones.** When touching one:
 
-1. Create `VerbNounAction` with `run()` taking a typed Data DTO — not a Command object.
+1. Create `VerbNounAction` with `run()` taking a typed Data DTO — not a Command object — and returning a typed DTO/Entity/VO/Result/DataCollection instead of an array when more than a scalar outcome is needed.
 2. Move the handler body into `run()`; check first whether a UC duplicate already exists (`UpsertAssetsFromSymbolsDataUC`, `GetAssetDetailsUC` already superseded their handlers — use that as the source and retire both into one Action).
 3. Replace call sites: `$this->commandBus->dispatch(new XCommand(...))` / `$this->queryBus->ask(new XQuery(...))` → direct constructor injection of the Action.
 4. Delete the Command/Query + Handler pair. When the last handler is gone, `Shared/Application/Support/Bus/` and the unused duplicate `Shared/Application/Support/CQRS/` can be removed.
@@ -144,6 +144,7 @@ Note: `BotStats/Domain/Queries/` contains raw `.sql` view definitions — not CQ
 
 - [ ] Class is in the correct layer folder; interfaces in `Domain/Interfaces/`
 - [ ] No forbidden imports for that layer
+- [ ] Public Application methods use typed DTO/Entity/VO/Result/DataCollection return contracts, not raw arrays
 - [ ] UI delegates — zero business logic in Filament/Livewire/Controller closures
 - [ ] Repository extends `BaseRepository`; cache decorator extends `BaseCache`
 - [ ] Type-hinted interfaces are bound in `TradingServiceProvider`
